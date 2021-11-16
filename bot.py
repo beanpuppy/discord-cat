@@ -2,6 +2,8 @@ import asyncio
 import os
 import json
 import discord
+import random
+
 # import requests
 
 from mcstatus import MinecraftServer
@@ -23,6 +25,7 @@ NOTIFY_STRING = ", ".join([f"<@{id}>" for i in NOTIFY_STAFF_IDS if i])
 server = MinecraftServer.lookup(SERVER_IP)
 client = discord.Client()
 
+presence_task = None
 status_channel = None
 stats_message_task = None
 
@@ -111,18 +114,30 @@ async def send_stats_message():
     save_data()
 
 
-def sync_send_stats_message():
-    asyncio.run(send_stats_message())
+async def change_presence():
+    song = random.choice([
+        "Alberto Balsam", "Nyan Cat", "Heartbeat", "Puppy Linux Song", "Kid A",
+        "#1F1e33", "Lateralus"
+    ])
+
+    await client.change_presence(
+        activity=discord.Activity(
+            type=discord.ActivityType.listening, name=song
+        )
+    )
 
 
 @client.event
 async def on_ready():
-    global status_channel, stats_message_task
+    global status_channel, stats_message_task, presence_task
 
     print(f"{client.user} has connected to Discord!")
 
     status_channel = client.get_channel(int(STATUS_CHANNEL_ID))
-    stats_message_task = asyncio.create_task(schedule_func(10, send_stats_message))
+    stats_message_task = asyncio.create_task(schedule_func(30, send_stats_message))
+
+    # Change precense each 30 mins
+    presence_task = asyncio.create_task(schedule_func(1800, change_presence))
 
 
 load_data()
