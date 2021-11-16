@@ -69,10 +69,15 @@ def format_server_stat_message(stats):
         return message
 
     players = stats["players"]
+    p_online = players["online"]
 
     message += ":green_circle: Server online! Have fun!\n\n"
-    message += f"{players['online']}/{players['max']} friends online:\n"
-    message += "\n".join(["- " + p for p in players["list"]])
+
+    if p_online:
+        message += f"{p_online}/{players['max']} friends online:\n"
+        message += "\n".join(["- " + p for p in players["list"]])
+    else:
+        message += "Nobody has joined yet :(\n"
 
     return message
 
@@ -88,12 +93,16 @@ async def send_stats_message():
     message = create_stats_message()
 
     if data["stats_message_id"]:
-        msg = await status_channel.fetch_message(data["stats_message_id"])
-        await msg.edit(content=message)
-    else:
-        res = await status_channel.send(message)
-        data["stats_message_id"] = res.id  # type: ignore
-        save_data()
+        try:
+            msg = await status_channel.fetch_message(data["stats_message_id"])
+            await msg.edit(content=message)
+            return
+        except discord.errors.NotFound:
+            pass
+
+    res = await status_channel.send(message)
+    data["stats_message_id"] = res.id  # type: ignore
+    save_data()
 
 
 def sync_send_stats_message():
