@@ -1,9 +1,10 @@
 import asyncio
 import os
-import requests
 import json
 import discord
+# import requests
 
+from mcstatus import MinecraftServer
 from datetime import datetime
 from dotenv import load_dotenv
 
@@ -19,6 +20,7 @@ SERVER_IP = os.environ["MC_SERVER_IP"]
 NOTIFY_STAFF_IDS = os.getenv("NOTIFY_STAFF_IDS", "").split(",")
 NOTIFY_STRING = ", ".join([f"<@{id}>" for i in NOTIFY_STAFF_IDS if i])
 
+server = MinecraftServer.lookup(SERVER_IP)
 client = discord.Client()
 
 status_channel = None
@@ -52,30 +54,34 @@ async def schedule_func(timeout, stuff):
         await stuff()
 
 
-def get_server_stats():
-    return requests.get(SRV_STAT_URL + SERVER_IP).json()
+def get_server_status():
+    try:
+        return server.status()
+    except Exception as e:
+        print(e)
+        return None
 
 
-def format_server_stat_message(stats):
+def format_server_stat_message(status):
     now = datetime.utcnow()
     now_formatted = now.strftime("%Y-%m-%d %H:%M:%S")
 
     message = f"My status report for Minecraft server on {SERVER_IP}\n"
     message += f"Last updated on {now_formatted} UTC+00:00\n\n"
 
-    if stats["online"] is False:
+    if status is None:
         message += ":red_circle: Server offline :(\n"
         message += "Please let staff know if it is down for a long time."
         return message
 
-    players = stats["players"]
-    p_online = players["online"]
+    players = status.players
+    p_online = players.online
 
     message += ":green_circle: Server online! Have fun!\n\n"
 
-    if p_online:
-        message += f"{p_online}/{players['max']} friends online:\n"
-        message += "\n".join(["- " + p for p in players["list"]])
+    if p_online > 0:
+        message += f"{p_online}/{players.max} friends online:\n"
+        message += "\n".join(["- " + p.name for p in players.sample])
     else:
         message += "Nobody has joined yet :(\n"
 
@@ -83,8 +89,8 @@ def format_server_stat_message(stats):
 
 
 def create_stats_message():
-    stats = get_server_stats()
-    return format_server_stat_message(stats)
+    status = get_server_status()
+    return format_server_stat_message(status)
 
 
 async def send_stats_message():
