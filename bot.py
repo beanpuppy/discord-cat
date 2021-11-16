@@ -3,16 +3,19 @@ import os
 import json
 import discord
 import random
+import logging
 
 # import requests
 
+from dateutil import parser, tz
 from mcstatus import MinecraftServer
-from datetime import datetime
+from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
 load_dotenv()
 
 JSON_FILE = "data/data.json"
+LOG_FILE = "data/data.log"
 SONGS_FILE = "songs.json"
 
 TOKEN = os.environ["DISCORD_TOKEN"]
@@ -22,6 +25,20 @@ SERVER_IP = os.environ["MC_SERVER_IP"]
 NOTIFY_STAFF_IDS = os.getenv("NOTIFY_STAFF_IDS", "").split(",")
 NOTIFY_STRING = ", ".join([f"<@{id}>" for i in NOTIFY_STAFF_IDS if i])
 
+EMOJIS = {
+    "beanplush": "<:beanplush:899476921002373130>",
+    "pikachu": "<:pikachu:909111043886833684>",
+    "eevee": "<:eevee:910222072385531945>",
+}
+
+logger = logging.getLogger("discord-mc-status")
+logger.setLevel(logging.DEBUG)
+formatter = logging.Formatter("%(asctime)s | %(levelname)s | %(message)s")
+fh = logging.FileHandler(LOG_FILE)
+fh.setLevel(logging.DEBUG)
+fh.setFormatter(formatter)
+logger.addHandler(fh)
+
 server = MinecraftServer.lookup(SERVER_IP)
 client = discord.Client()
 
@@ -29,12 +46,22 @@ with open(SONGS_FILE, "r") as file:
     songs = json.load(file)
 
 presence_task = None
-status_channel = None
 stats_message_task = None
+save_data_task = None
 
-data = {
-    "stats_message_id": None,
-}
+status_channel = None
+
+data = {"stats_message_id": None, "players": {}}
+
+
+def parse_date(date):
+    dt = parser.parse(date)
+    dt.astimezone(tz.UTC)
+    return dt
+
+
+def format_date(date):
+    return date.strftime("%Y-%m-%d %H:%M:%S")
 
 
 def load_data():
@@ -42,7 +69,7 @@ def load_data():
 
     try:
         with open(JSON_FILE, "r") as file:
-            data = json.load(file)
+            data.update(json.load(file))
     except FileNotFoundError:
         pass
 
@@ -54,26 +81,32 @@ def save_data():
         json.dump(data, file)
 
 
-async def schedule_func(timeout, stuff):
+async def schedule_func(timeout, func):
     while True:
         await asyncio.sleep(timeout)
-        await stuff()
+
+        try:
+            await func()
+        except Exception as e:
+            logger.error(e)
 
 
 def get_server_status():
     try:
         return server.status()
     except Exception as e:
-        print(e)
+        logger.error(e)
         return None
 
 
 def format_server_stat_message(status):
     now = datetime.utcnow()
-    now_formatted = now.strftime("%Y-%m-%d %H:%M:%S")
+    now_formatted = format_date(now)
 
     message = "@here is my server status report!\n"
     message += f"`updated at {now_formatted} UTC`\n\n"
+
+    # Server status
 
     if status is None:
         message += ":red_circle: Server offline :(\n"
@@ -85,11 +118,43 @@ def format_server_stat_message(status):
 
     message += ":green_circle: Server online! Have fun!\n\n"
 
+    # Players online
+
     if p_online > 0:
-        message += f"{p_online} friend{'s' if p_online > 1 else ''} online:\n"
+        message += (
+            f"{p_online} friend{'s' if p_online > 1 else ''} "
+            f"are online now! {EMOJIS['eevee']}\n"
+        )
         message += "\n".join(["- " + p.name for p in players.sample])
+
+        for p in players.sample:
+            data["players"][p.name] = {"last_seen": now_formatted}
     else:
-        message += "Nobody is online right now :("
+        message += f"Nobody is online right now {EMOJIS['pikachu']}"
+
+    # Num players online past day
+
+    message += "\n\n"
+    data_players = data["players"].items()
+    now_delta = now - timedelta(hours=24)
+
+    if len(data_players) > 0:
+        count = len(
+            [
+                p_data
+                for _, p_data in data_players
+                if now_delta <= parse_date(p_data["last_seen"]) <= now
+            ]
+        )
+
+        message += (
+            f"{EMOJIS['beanplush']} I've seen {count} friend{'s' if count > 1 else ''} "
+            f"online in the past day"
+        )
+    else:
+        message += "I've seen no friends online in the past day"
+
+    save_data()
 
     return message
 
@@ -113,7 +178,7 @@ async def send_stats_message():
             pass
 
     res = await status_channel.send(message)
-    data["stats_message_id"] = res.id  # type: ignore
+    data["stats_message_id"] = res.id
     save_data()
 
 
@@ -124,12 +189,15 @@ async def change_presence():
         activity=discord.Activity(type=discord.ActivityType.listening, name=song)
     )
 
+    # Piggybacking off this function to periodically save data to disk
+    save_data()
+
 
 @client.event
 async def on_ready():
     global status_channel, stats_message_task, presence_task
 
-    print(f"{client.user} has connected to Discord!")
+    logger.info(f"{client.user} has connected to Discord!")
 
     status_channel = client.get_channel(int(STATUS_CHANNEL_ID))
     stats_message_task = asyncio.create_task(schedule_func(30, send_stats_message))
@@ -139,5 +207,6 @@ async def on_ready():
     presence_task = asyncio.create_task(schedule_func(1800, change_presence))
 
 
-load_data()
-client.run(TOKEN)
+if __name__ == "__main__":
+    load_data()
+    client.run(TOKEN)
