@@ -69,8 +69,8 @@ def format_server_stat_message(status):
     now = datetime.utcnow()
     now_formatted = now.strftime("%Y-%m-%d %H:%M:%S")
 
-    message = f"My status report for Minecraft server on {SERVER_IP}\n"
-    message += f"Last updated on {now_formatted} UTC+00:00\n\n"
+    message = "@here is my server status report!\n"
+    message += f"`updated at {now_formatted} UTC`\n\n"
 
     if status is None:
         message += ":red_circle: Server offline :(\n"
@@ -83,10 +83,10 @@ def format_server_stat_message(status):
     message += ":green_circle: Server online! Have fun!\n\n"
 
     if p_online > 0:
-        message += f"{p_online}/{players.max} friends online:\n"
+        message += f"{p_online} friend{'s' if p_online > 1 else ''} online:\n"
         message += "\n".join(["- " + p.name for p in players.sample])
     else:
-        message += "Nobody has joined yet :(\n"
+        message += "Nobody is online now :("
 
     return message
 
