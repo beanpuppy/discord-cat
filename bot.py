@@ -137,6 +137,7 @@ async def on_ready():
     stats_message_task = asyncio.create_task(schedule_func(30, send_stats_message))
 
     # Change each 30 mins
+    await change_presence()
     presence_task = asyncio.create_task(schedule_func(1800, change_presence))
 
 
