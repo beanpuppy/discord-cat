@@ -12,8 +12,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-SRV_STAT_URL = "https://api.mcsrvstat.us/2/"
 JSON_FILE = "data/data.json"
+SONGS_FILE = "songs.json"
 
 TOKEN = os.environ["DISCORD_TOKEN"]
 STATUS_CHANNEL_ID = os.environ["STATUS_CHANNEL_ID"]
@@ -24,6 +24,9 @@ NOTIFY_STRING = ", ".join([f"<@{id}>" for i in NOTIFY_STAFF_IDS if i])
 
 server = MinecraftServer.lookup(SERVER_IP)
 client = discord.Client()
+
+with open(SONGS_FILE, "r") as file:
+    songs = json.load(file)
 
 presence_task = None
 status_channel = None
@@ -86,7 +89,7 @@ def format_server_stat_message(status):
         message += f"{p_online} friend{'s' if p_online > 1 else ''} online:\n"
         message += "\n".join(["- " + p.name for p in players.sample])
     else:
-        message += "Nobody is online now :("
+        message += "Nobody is online right now :("
 
     return message
 
@@ -115,15 +118,10 @@ async def send_stats_message():
 
 
 async def change_presence():
-    song = random.choice([
-        "Alberto Balsam", "Nyan Cat", "Heartbeat", "Puppy Linux Song", "Kid A",
-        "#1F1e33", "Lateralus"
-    ])
+    song = random.choice(songs)
 
     await client.change_presence(
-        activity=discord.Activity(
-            type=discord.ActivityType.listening, name=song
-        )
+        activity=discord.Activity(type=discord.ActivityType.listening, name=song)
     )
 
 

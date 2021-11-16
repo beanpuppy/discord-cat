@@ -5,7 +5,7 @@ Discord bot to show Minecraft server status.
 ## Development/Setup
 
 * Guess.
-* This is 100 lines of code.
+* This is 200 lines of code.
 * It's not that hard.
 
 ## Running
