@@ -13,8 +13,11 @@ SRV_STAT_URL = "https://api.mcsrvstat.us/2/"
 JSON_FILE = "data/data.json"
 
 TOKEN = os.environ["DISCORD_TOKEN"]
-CHANNEL_ID = os.environ["DISCORD_CHANNEL_ID"]
+STATUS_CHANNEL_ID = os.environ["STATUS_CHANNEL_ID"]
 SERVER_IP = os.environ["MC_SERVER_IP"]
+
+NOTIFY_STAFF_IDS = os.getenv("NOTIFY_STAFF_IDS", "").split(",")
+NOTIFY_STRING = ", ".join([f"<@{id}>" for i in NOTIFY_STAFF_IDS if i])
 
 client = discord.Client()
 
@@ -103,7 +106,7 @@ async def on_ready():
 
     print(f"{client.user} has connected to Discord!")
 
-    status_channel = client.get_channel(int(CHANNEL_ID))
+    status_channel = client.get_channel(int(STATUS_CHANNEL_ID))
     stats_message_task = asyncio.create_task(schedule_func(10, send_stats_message))
 
 
