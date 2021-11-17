@@ -139,7 +139,7 @@ def format_server_stat_message(now, status):
 
     if status is None:
         message += ":red_circle: Server offline :(\n"
-        message += "Please let staff know has been down for a long time."
+        message += "Please let staff know if it has been down for a long time."
         return message
 
     players = status.players
