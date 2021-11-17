@@ -20,8 +20,10 @@ TOKEN = os.environ["DISCORD_TOKEN"]
 STATUS_CHANNEL_ID = os.environ["STATUS_CHANNEL_ID"]
 SERVER_IP = os.environ["MC_SERVER_IP"]
 
-NOTIFY_STAFF_IDS = os.getenv("NOTIFY_STAFF_IDS", "").split(",")
-NOTIFY_STRING = ", ".join([f"<@{id}>" for i in NOTIFY_STAFF_IDS if i])
+ENVIRONMENT = os.getenv("ENVIRONMENT", "dev")
+GRACE_PERIOD = int(os.getenv("GRACE_PERIOD", "3"))
+STAFF_IDS = os.getenv("STAFF_IDS", "").split(",")
+NOTIFY_STRING = ", ".join([f"<@{id}>" for i in STAFF_IDS if i])
 
 EMOJIS = {
     "beanplush": "<:beanplush:899476921002373130>",
@@ -49,7 +51,12 @@ save_data_task = None
 
 status_channel = None
 
-data = {"stats_message_id": None, "players": {}, "downtime": []}
+data = {
+    "stats_message_id": None,
+    "players": {},
+    "downtime_started": None,
+    "downtime_history": [],
+}
 
 
 def parse_date(date):
@@ -90,15 +97,39 @@ async def schedule_func(timeout, func):
 
 
 def get_server_status():
-    try:
-        return server.status()
-    except Exception as e:
-        logger.error(e)
-        return None
+    global data
 
-
-def format_server_stat_message(status):
     now = datetime.utcnow()
+
+    try:
+        status = server.status()
+
+        # Server is up, measure the time if it was down
+        if data["downtime_started"] is not None:
+            downtime_started = parse_date(data["downtime_started"])
+
+            # Let's be nice and give a grace period
+            grace_period = downtime_started + timedelta(minutes=GRACE_PERIOD)
+
+            if now > grace_period:  # type: ignore
+                data["downtime_history"].append(
+                    {"start": format_date(downtime_started), "end": format_date(now)}
+                )
+
+            data["downtime_started"] = None
+
+        return [now, status]
+    except Exception as e:
+        # Exception raised means server is down
+        logger.error(e)
+
+        if data["downtime_started"] is None:
+            data["downtime_started"] = format_date(now)
+
+        return [now, None]
+
+
+def format_server_stat_message(now, status):
     now_formatted = format_date(now)
 
     message = "@here is my server status report!\n"
@@ -108,7 +139,7 @@ def format_server_stat_message(status):
 
     if status is None:
         message += ":red_circle: Server offline :(\n"
-        message += "Please let staff know if it is down for a long time."
+        message += "Please let staff know has been down for a long time."
         return message
 
     players = status.players
@@ -150,14 +181,18 @@ def format_server_stat_message(status):
             f"online in the past day"
         )
     else:
-        message += "I've seen no friends online in the past day"
+        message += "I haven't seen any friends online in the past day"
 
     return message
 
 
 def create_stats_message():
-    status = get_server_status()
-    return format_server_stat_message(status)
+    now, status = get_server_status()
+    message = format_server_stat_message(now, status)
+
+    save_data()
+
+    return message
 
 
 async def send_stats_message():
@@ -185,9 +220,6 @@ async def change_presence():
         activity=discord.Activity(type=discord.ActivityType.listening, name=song)
     )
 
-    # Piggybacking off this function to periodically save data to disk
-    save_data()
-
 
 @client.event
 async def on_ready():
@@ -196,11 +228,12 @@ async def on_ready():
     logger.info(f"{client.user} has connected to Discord!")
 
     status_channel = client.get_channel(int(STATUS_CHANNEL_ID))
-    stats_message_task = asyncio.create_task(schedule_func(30, send_stats_message))
+    stats_message_task = asyncio.create_task(schedule_func(5, send_stats_message))
 
     # Change each 30 mins
-    await change_presence()
-    presence_task = asyncio.create_task(schedule_func(1800, change_presence))
+    if ENVIRONMENT == "prod":
+        await change_presence()
+        presence_task = asyncio.create_task(schedule_func(1800, change_presence))
 
 
 if __name__ == "__main__":
