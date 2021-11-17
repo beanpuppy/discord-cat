@@ -228,7 +228,7 @@ async def on_ready():
     logger.info(f"{client.user} has connected to Discord!")
 
     status_channel = client.get_channel(int(STATUS_CHANNEL_ID))
-    stats_message_task = asyncio.create_task(schedule_func(5, send_stats_message))
+    stats_message_task = asyncio.create_task(schedule_func(30, send_stats_message))
 
     # Change each 30 mins
     if ENVIRONMENT == "prod":
