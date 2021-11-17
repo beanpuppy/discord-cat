@@ -5,8 +5,6 @@ import discord
 import random
 import logging
 
-# import requests
-
 from dateutil import parser, tz
 from mcstatus import MinecraftServer
 from datetime import datetime, timedelta
@@ -51,7 +49,7 @@ save_data_task = None
 
 status_channel = None
 
-data = {"stats_message_id": None, "players": {}}
+data = {"stats_message_id": None, "players": {}, "downtime": []}
 
 
 def parse_date(date):
@@ -153,8 +151,6 @@ def format_server_stat_message(status):
         )
     else:
         message += "I've seen no friends online in the past day"
-
-    save_data()
 
     return message
 
