@@ -21,7 +21,7 @@ STATUS_CHANNEL_ID = os.environ["STATUS_CHANNEL_ID"]
 SERVER_IP = os.environ["MC_SERVER_IP"]
 
 ENVIRONMENT = os.getenv("ENVIRONMENT", "dev")
-GRACE_PERIOD = int(os.getenv("GRACE_PERIOD", "3"))
+GRACE_PERIOD = int(os.getenv("GRACE_PERIOD", "5"))
 STAFF_IDS = os.getenv("STAFF_IDS", "").split(",")
 NOTIFY_STRING = ", ".join([f"<@{id}>" for i in STAFF_IDS if i])
 
