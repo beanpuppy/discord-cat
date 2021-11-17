@@ -21,6 +21,7 @@ STATUS_CHANNEL_ID = os.environ["STATUS_CHANNEL_ID"]
 SERVER_IP = os.environ["MC_SERVER_IP"]
 
 ENVIRONMENT = os.getenv("ENVIRONMENT", "dev")
+PING_INTERVAL = int(os.getenv("PING_INTERVAL", "30"))
 GRACE_PERIOD = int(os.getenv("GRACE_PERIOD", "5"))
 STAFF_IDS = os.getenv("STAFF_IDS", "").split(",")
 NOTIFY_STRING = ", ".join([f"<@{id}>" for i in STAFF_IDS if i])
@@ -93,6 +94,10 @@ async def schedule_func(timeout, func):
         try:
             await func()
         except Exception as e:
+            if ENVIRONMENT == "dev":
+                print(e)
+                raise e
+
             logger.error(e)
 
 
@@ -129,6 +134,41 @@ def get_server_status():
         return [now, None]
 
 
+def set_player_sessions(now_formatted, sample):
+    global data
+
+    online_names = [s.name for s in sample or []]
+
+    for p in online_names:
+        player = data["players"].get(p, {})
+
+        sessions = player.get("sessions", {})
+        current = sessions.get("current", None)
+
+        if current is None:
+            sessions.update({"current": now_formatted})
+
+        player["last_seen"] = now_formatted
+        player["online"] = True
+        player["sessions"] = sessions
+
+        data["players"][p] = player
+
+    for name, value in data["players"].items():
+        if value.get("online") is True and name not in online_names:
+            session_start = value["sessions"]["current"]
+
+            if data["players"][name]["sessions"].get("history") is None:
+                data["players"][name]["sessions"]["history"] = []
+
+            data["players"][name]["sessions"]["current"] = None
+            data["players"][name]["sessions"]["history"].append(
+                {"start": session_start, "end": now_formatted}
+            )
+
+            data["players"][name]["online"] = False
+
+
 def format_server_stat_message(now, status):
     now_formatted = format_date(now)
 
@@ -136,10 +176,10 @@ def format_server_stat_message(now, status):
     message += f"`updated at {now_formatted} UTC`\n\n"
 
     # Server status
-
     if status is None:
         message += ":red_circle: Server offline :(\n"
         message += "Please let staff know if it has been down for a long time."
+        set_player_sessions(now_formatted, [])
         return message
 
     players = status.players
@@ -148,21 +188,16 @@ def format_server_stat_message(now, status):
     message += ":green_circle: Server online! Have fun!\n\n"
 
     # Players online
-
     if p_online > 0:
         message += (
             f"{p_online} friend{'s' if p_online > 1 else ''} "
             f"are online now! {EMOJIS['eevee']}\n"
         )
         message += "\n".join(["- " + p.name for p in players.sample])
-
-        for p in players.sample:
-            data["players"][p.name] = {"last_seen": now_formatted}
     else:
         message += f"Nobody is online right now {EMOJIS['pikachu']}"
 
     # Num players online past day
-
     message += "\n\n"
     data_players = data["players"].items()
     now_delta = now - timedelta(hours=24)
@@ -182,6 +217,9 @@ def format_server_stat_message(now, status):
         )
     else:
         message += "I haven't seen any friends online in the past day"
+
+    # Player session history
+    set_player_sessions(now_formatted, players.sample)
 
     return message
 
@@ -228,7 +266,9 @@ async def on_ready():
     logger.info(f"{client.user} has connected to Discord!")
 
     status_channel = client.get_channel(int(STATUS_CHANNEL_ID))
-    stats_message_task = asyncio.create_task(schedule_func(30, send_stats_message))
+    stats_message_task = asyncio.create_task(
+        schedule_func(PING_INTERVAL, send_stats_message)
+    )
 
     # Change each 30 mins
     if ENVIRONMENT == "prod":
