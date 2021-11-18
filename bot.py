@@ -92,16 +92,18 @@ async def schedule_func(timeout, func):
     while True:
         await asyncio.sleep(timeout)
 
+        db.connect()
+
         try:
-            db.connect()
             await func()
-            db.close()
         except Exception as e:
             if ENVIRONMENT == "dev":
                 print(e)
                 raise e
 
             logger.error(e)
+        finally:
+            db.close()
 
 
 def get_server_status():
