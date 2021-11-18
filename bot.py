@@ -25,6 +25,7 @@ SERVER_IP = os.environ["MC_SERVER_IP"]
 ENVIRONMENT = os.getenv("ENVIRONMENT", "dev")
 PING_INTERVAL = int(os.getenv("PING_INTERVAL", "30"))
 GRACE_PERIOD = int(os.getenv("GRACE_PERIOD", "5"))
+DEFAULT_ROLES = os.getenv("DEFAULT_ROLES", "").split(",")
 STAFF_IDS = os.getenv("STAFF_IDS", "").split(",")
 NOTIFY_STRING = ", ".join([f"<@{id}>" for i in STAFF_IDS if i])
 
@@ -43,7 +44,10 @@ fh.setFormatter(formatter)
 logger.addHandler(fh)
 
 server = MinecraftServer.lookup(SERVER_IP)
-client = discord.Client()
+
+intents = discord.Intents.default()
+intents.members = True
+client = discord.Client(intents=intents)
 
 with open(SONGS_FILE, "r") as file:
     songs = json.load(file)
@@ -54,11 +58,7 @@ save_data_task = None
 
 status_channel = None
 
-data = {
-    "stats_message_id": None,
-    "players": {},
-    "downtime_started": None
-}
+data = {"stats_message_id": None, "players": {}, "downtime_started": None}
 
 
 def parse_date(date):
@@ -250,6 +250,13 @@ async def change_presence():
     await client.change_presence(
         activity=discord.Activity(type=discord.ActivityType.listening, name=song)
     )
+
+
+@client.event
+async def on_member_join(member):
+    for role_id in DEFAULT_ROLES:
+        role = discord.utils.get(member.guild.roles, id=int(role_id))
+        await member.add_roles(role)
 
 
 @client.event

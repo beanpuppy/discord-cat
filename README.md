@@ -1,6 +1,6 @@
-# discord-mc-status
+# beanpuppy's cat
 
-Discord bot to show Minecraft server status.
+General purpose Discord bot.
 
 ## Development/Setup
 
