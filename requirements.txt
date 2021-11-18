@@ -3,3 +3,4 @@ requests==2.26.0
 python-dotenv==0.19.2
 mcstatus==6.5.0
 python-dateutil==2.8.2
+estoult==0.7.9

@@ -10,11 +10,13 @@ from mcstatus import MinecraftServer
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
+from lib.db import db, create_db, SessionHistory, DowntimeHistory
+
 load_dotenv()
 
 JSON_FILE = "data/data.json"
 LOG_FILE = "data/data.log"
-SONGS_FILE = "songs.json"
+SONGS_FILE = "data/songs.json"
 
 TOKEN = os.environ["DISCORD_TOKEN"]
 STATUS_CHANNEL_ID = os.environ["STATUS_CHANNEL_ID"]
@@ -55,8 +57,7 @@ status_channel = None
 data = {
     "stats_message_id": None,
     "players": {},
-    "downtime_started": None,
-    "downtime_history": [],
+    "downtime_started": None
 }
 
 
@@ -92,7 +93,9 @@ async def schedule_func(timeout, func):
         await asyncio.sleep(timeout)
 
         try:
+            db.connect()
             await func()
+            db.close()
         except Exception as e:
             if ENVIRONMENT == "dev":
                 print(e)
@@ -117,7 +120,7 @@ def get_server_status():
             grace_period = downtime_started + timedelta(minutes=GRACE_PERIOD)
 
             if now > grace_period:  # type: ignore
-                data["downtime_history"].append(
+                DowntimeHistory.insert(
                     {"start": format_date(downtime_started), "end": format_date(now)}
                 )
 
@@ -141,32 +144,22 @@ def set_player_sessions(now_formatted, sample):
 
     for p in online_names:
         player = data["players"].get(p, {})
-
-        sessions = player.get("sessions", {})
-        current = sessions.get("current", None)
-
-        if current is None:
-            sessions.update({"current": now_formatted})
+        online = player.get("online")
 
         player["last_seen"] = now_formatted
-        player["online"] = True
-        player["sessions"] = sessions
+
+        if online is None:
+            player["online"] = now_formatted
 
         data["players"][p] = player
 
     for name, value in data["players"].items():
-        if value.get("online") is True and name not in online_names:
-            session_start = value["sessions"]["current"]
-
-            if data["players"][name]["sessions"].get("history") is None:
-                data["players"][name]["sessions"]["history"] = []
-
-            data["players"][name]["sessions"]["current"] = None
-            data["players"][name]["sessions"]["history"].append(
-                {"start": session_start, "end": now_formatted}
+        if value.get("online") is not None and name not in online_names:
+            SessionHistory.insert(
+                {"player": name, "start": value["online"], "end": now_formatted}
             )
 
-            data["players"][name]["online"] = False
+            data["players"][name]["online"] = None
 
 
 def format_server_stat_message(now, status):
@@ -277,5 +270,6 @@ async def on_ready():
 
 
 if __name__ == "__main__":
+    create_db()
     load_data()
     client.run(TOKEN)
