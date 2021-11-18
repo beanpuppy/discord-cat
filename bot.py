@@ -16,7 +16,7 @@ load_dotenv()
 
 JSON_FILE = "data/data.json"
 LOG_FILE = "data/data.log"
-SONGS_FILE = "data/songs.json"
+SONGS_FILE = "songs.json"
 
 TOKEN = os.environ["DISCORD_TOKEN"]
 STATUS_CHANNEL_ID = os.environ["STATUS_CHANNEL_ID"]
