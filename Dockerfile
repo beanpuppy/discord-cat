@@ -4,8 +4,10 @@ WORKDIR /src
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 
-RUN mkdir data
 COPY bot.py .
+ADD lib lib
+
+RUN mkdir data
 COPY data/songs.json data/
 
 CMD ["python", "bot.py"]
