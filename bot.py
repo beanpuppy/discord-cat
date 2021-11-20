@@ -5,6 +5,8 @@ import discord
 import random
 import logging
 
+from discord.ext import commands
+from discord_slash import SlashCommand
 from dateutil import parser, tz
 from mcstatus import MinecraftServer
 from datetime import datetime, timedelta
@@ -19,6 +21,7 @@ LOG_FILE = "data/data.log"
 SONGS_FILE = "songs.json"
 
 TOKEN = os.environ["DISCORD_TOKEN"]
+GUILD_ID = int(os.environ["GUILD_ID"])
 STATUS_CHANNEL_ID = os.environ["STATUS_CHANNEL_ID"]
 SERVER_IP = os.environ["MC_SERVER_IP"]
 
@@ -45,9 +48,9 @@ logger.addHandler(fh)
 
 server = MinecraftServer.lookup(SERVER_IP)
 
-intents = discord.Intents.default()
-intents.members = True
-client = discord.Client(intents=intents)
+intents = discord.Intents.all()
+bot = commands.Bot(intents=intents, command_prefix="/")
+slash = SlashCommand(bot, sync_commands=True)
 
 with open(SONGS_FILE, "r") as file:
     songs = json.load(file)
@@ -249,25 +252,25 @@ async def send_stats_message():
 async def change_presence():
     song = random.choice(songs)
 
-    await client.change_presence(
+    await bot.change_presence(
         activity=discord.Activity(type=discord.ActivityType.listening, name=song)
     )
 
 
-@client.event
+@bot.event
 async def on_member_join(member):
     for role_id in DEFAULT_ROLES:
         role = discord.utils.get(member.guild.roles, id=int(role_id))
         await member.add_roles(role)
 
 
-@client.event
+@bot.event
 async def on_ready():
     global status_channel, stats_message_task, presence_task
 
-    logger.info(f"{client.user} has connected to Discord!")
+    logger.info(f"{bot.user} has connected to Discord!")
 
-    status_channel = client.get_channel(int(STATUS_CHANNEL_ID))
+    status_channel = bot.get_channel(int(STATUS_CHANNEL_ID))
     stats_message_task = asyncio.create_task(
         schedule_func(PING_INTERVAL, send_stats_message)
     )
@@ -278,7 +281,16 @@ async def on_ready():
         presence_task = asyncio.create_task(schedule_func(1800, change_presence))
 
 
+@slash.slash(
+    name="modpack",
+    description="Displays the Minecraft modpack link",
+    guild_ids=[GUILD_ID],
+)
+async def modpack(ctx):
+    await ctx.send("https://www.curseforge.com/minecraft/modpacks/rule-breakers")
+
+
 if __name__ == "__main__":
     create_db()
     load_data()
-    client.run(TOKEN)
+    bot.run(TOKEN)
